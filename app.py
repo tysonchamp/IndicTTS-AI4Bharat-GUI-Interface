@@ -6,6 +6,7 @@ from transformers import AutoTokenizer
 import soundfile as sf
 import io
 import numpy as np
+import gc
 
 # Page Config
 st.set_page_config(page_title="IndicTTS Interface", layout="wide")
@@ -122,22 +123,33 @@ if st.button("Generate Audio", type="primary"):
     else:
         try:
             with st.spinner("Generating audio..."):
-                description_input_ids = description_tokenizer(description_text, return_tensors="pt").to(device)
-                prompt_input_ids = tokenizer(prompt_text, return_tensors="pt").to(device)
+                with torch.no_grad():
+                    description_input_ids = description_tokenizer(description_text, return_tensors="pt").to(device)
+                    prompt_input_ids = tokenizer(prompt_text, return_tensors="pt").to(device)
 
-                generation = model.generate(
-                    input_ids=description_input_ids.input_ids, 
-                    attention_mask=description_input_ids.attention_mask, 
-                    prompt_input_ids=prompt_input_ids.input_ids, 
-                    prompt_attention_mask=prompt_input_ids.attention_mask
-                )
-                
-                audio_arr = generation.cpu().numpy().squeeze()
+                    generation = model.generate(
+                        input_ids=description_input_ids.input_ids, 
+                        attention_mask=description_input_ids.attention_mask, 
+                        prompt_input_ids=prompt_input_ids.input_ids, 
+                        prompt_attention_mask=prompt_input_ids.attention_mask
+                    )
+                    
+                    audio_arr = generation.cpu().numpy().squeeze()
                 
                 # Write to buffer for Streamlit
                 buffer = io.BytesIO()
                 sf.write(buffer, audio_arr, model.config.sampling_rate, format='WAV')
                 buffer.seek(0)
+                
+                # Memory Cleanup
+                del description_input_ids
+                del prompt_input_ids
+                del generation
+                del audio_arr
+                gc.collect()
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                
                 
                 st.success("Generation Complete!")
                 st.audio(buffer, format='audio/wav')
