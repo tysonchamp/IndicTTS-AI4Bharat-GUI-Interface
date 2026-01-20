@@ -1,4 +1,5 @@
-
+import transformers
+transformers.logging.set_verbosity_error()
 import streamlit as st
 import torch
 from parler_tts import ParlerTTSForConditionalGeneration
